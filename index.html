@@ -1590,7 +1590,6 @@
             flex-shrink: 0;
             margin-top: 0.1rem;
         }
-
         .info-text {
             color: var(--text);
             flex: 1;
@@ -3108,7 +3107,6 @@
         .theme-dim .image-placeholder-subtext {
             color: #9ca3af;
         }
-
         /* Responsive design for image generation modal */
         @media (max-width: 768px) {
             .image-generation-content {
@@ -3901,7 +3899,6 @@
             </div>
         </div>
     </div>
-
     <!-- Image Generation Modal -->
     <div class="image-generation-modal" id="imageGenerationModal">
         <div class="image-generation-content">
@@ -4702,7 +4699,6 @@
         function closeModal() {
             elements.apiKeyModal.classList.remove('visible');
         }
-
         function closeCustomizationModal() {
             elements.customizationModal.classList.remove('visible');
         }
@@ -5281,7 +5277,6 @@
         const cls = msg.role === 'user' ? 'user-message' : 'ai-message';
         return `<div class="message ${cls}"><div class="message-content">${html}</div></div>`;
     }).join('');
-
     return `<!DOCTYPE html>
             <html>
             <head>
@@ -5587,9 +5582,8 @@
                 const sanitized = sanitizeChatsForStorage(allChats);
                 const dataToSave = JSON.stringify(sanitized);
                 
-                // Estimate storage usage
-                const currentUsage = estimateStorageUsage();
-                const newUsage = currentUsage + dataToSave.length;
+                // More accurate usage estimation – size of the data that will be stored
+                const newUsage = dataToSave.length;
                 
                 // Warn if approaching quota (5MB limit)
                 if (newUsage > 4.5 * 1024 * 1024) {
@@ -5823,7 +5817,6 @@ Feel free to ask me anything!`;
             if (chatHistory.length === 0) {
                 // Add welcome message for new chats
                 const welcomeMessage = `# Welcome! 👋
-
 I'm your AI assistant. How can I help you today?`;
                 addMessage(welcomeMessage, 'ai', null, selectedModel);
                 chat.history.push({ role: "model", parts: [{ text: welcomeMessage }], modelUsed: selectedModel });
@@ -6165,10 +6158,10 @@ I'm your AI assistant. How can I help you today?`;
                 } else {
                     createNewChat();
                 }
-            } else {
+            }
+            // Always persist the updated chat list to localStorage and refresh UI
             saveChats();
             debouncedRenderChatList();
-            }
             deleteConfirmChatId = null;
         }
 
@@ -6225,7 +6218,8 @@ I'm your AI assistant. How can I help you today?`;
                 content.className = 'message-content';
                 // Use marked.js for robust markdown parsing (no debug <pre>)
                 try {
-                    content.innerHTML = marked.parse(text || '');
+                    // Sanitize AI output before injecting into the DOM to prevent XSS
+                    content.innerHTML = sanitizeHtml(marked.parse(text || ''));
                     // Enhance code blocks to GPT/Gemini style containers
                     content.querySelectorAll('pre code').forEach(codeBlock => {
                         const pre = codeBlock.parentNode;
@@ -6616,7 +6610,6 @@ I'm your AI assistant. How can I help you today?`;
                 this.style.height = Math.min(this.scrollHeight, 200) + 'px';
             });
         }
-        
         function saveMessageEdit(messageId, newText) {
             if (!newText.trim()) {
                 alert('Message cannot be empty');
@@ -7396,7 +7389,6 @@ I'm your AI assistant. How can I help you today?`;
                 }
             });
         }
-
         // Parse admonitions/callouts
         function parseAdmonitions(md) {
             const lines = md.split(/\r?\n/);
@@ -8196,7 +8188,6 @@ I'm your AI assistant. How can I help you today?`;
             elements.clearSearchBtn.style.display = 'none';
             debouncedRenderChatList();
         });
-
         // Keyboard shortcut for search (Ctrl/Cmd + F)
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -8963,7 +8954,6 @@ I'm your AI assistant. How can I help you today?`;
             }
             renderImagePreviews();
         }
-
         // --- Office File Conversion Functions ---
         
         // Show conversion notification

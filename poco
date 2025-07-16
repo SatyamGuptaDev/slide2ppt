@@ -1,0 +1,879 @@
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
+
+// STM32F446RE Register Definitions
+#define PERIPH_BASE           0x40000000UL
+#define AHB1PERIPH_BASE       (PERIPH_BASE + 0x00020000UL)
+#define APB1PERIPH_BASE       PERIPH_BASE
+#define APB2PERIPH_BASE       (PERIPH_BASE + 0x00010000UL)
+
+// RCC Base Address and Registers
+#define RCC_BASE              (AHB1PERIPH_BASE + 0x3800UL)
+typedef struct {
+    volatile uint32_t CR;            // 0x00
+    volatile uint32_t PLLCFGR;       // 0x04
+    volatile uint32_t CFGR;          // 0x08
+    volatile uint32_t CIR;           // 0x0C
+    volatile uint32_t AHB1RSTR;      // 0x10
+    volatile uint32_t AHB2RSTR;      // 0x14
+    volatile uint32_t AHB3RSTR;      // 0x18
+    uint32_t RESERVED0;              // 0x1C
+    volatile uint32_t APB1RSTR;      // 0x20
+    volatile uint32_t APB2RSTR;      // 0x24
+    uint32_t RESERVED1[2];           // 0x28-0x2C
+    volatile uint32_t AHB1ENR;       // 0x30
+    volatile uint32_t AHB2ENR;       // 0x34
+    volatile uint32_t AHB3ENR;       // 0x38
+    uint32_t RESERVED2;              // 0x3C
+    volatile uint32_t APB1ENR;       // 0x40
+    volatile uint32_t APB2ENR;       // 0x44
+} RCC_TypeDef;
+#define RCC ((RCC_TypeDef *) RCC_BASE)
+
+// RCC Register Bits
+#define RCC_CR_HSION          (1UL << 0)
+#define RCC_CR_HSIRDY         (1UL << 1)
+#define RCC_CFGR_SW_HSI       0x00000000UL
+#define RCC_CFGR_SW           (3UL << 0)
+#define RCC_CFGR_SWS          (3UL << 2)
+#define RCC_CFGR_SWS_HSI      (0UL << 2)
+#define RCC_AHB1ENR_GPIOAEN   (1UL << 0)
+#define RCC_AHB1ENR_GPIOBEN   (1UL << 1)
+#define RCC_APB1ENR_I2C1EN    (1UL << 21)
+
+// GPIO Base Addresses
+#define GPIOA_BASE            (AHB1PERIPH_BASE + 0x0000UL)
+#define GPIOB_BASE            (AHB1PERIPH_BASE + 0x0400UL)
+typedef struct {
+    volatile uint32_t MODER;         // 0x00
+    volatile uint32_t OTYPER;        // 0x04
+    volatile uint32_t OSPEEDR;       // 0x08
+    volatile uint32_t PUPDR;         // 0x0C
+    volatile uint32_t IDR;           // 0x10
+    volatile uint32_t ODR;           // 0x14
+    volatile uint32_t BSRR;          // 0x18
+    volatile uint32_t LCKR;          // 0x1C
+    volatile uint32_t AFR[2];        // 0x20-0x24
+} GPIO_TypeDef;
+#define GPIOA ((GPIO_TypeDef *) GPIOA_BASE)
+#define GPIOB ((GPIO_TypeDef *) GPIOB_BASE)
+
+// GPIO Register Bits
+#define GPIO_MODER_MODER8     (3UL << 16)
+#define GPIO_MODER_MODER8_1   (2UL << 16)
+#define GPIO_MODER_MODER9     (3UL << 18)
+#define GPIO_MODER_MODER9_1   (2UL << 18)
+#define GPIO_OTYPER_OT_8      (1UL << 8)
+#define GPIO_OTYPER_OT_9      (1UL << 9)
+#define GPIO_OSPEEDER_OSPEEDR8 (3UL << 16)
+#define GPIO_OSPEEDER_OSPEEDR9 (3UL << 18)
+#define GPIO_PUPDR_PUPDR8     (3UL << 16)
+#define GPIO_PUPDR_PUPDR8_0   (1UL << 16)
+#define GPIO_PUPDR_PUPDR9     (3UL << 18)
+#define GPIO_PUPDR_PUPDR9_0   (1UL << 18)
+
+// DHT11 Configuration
+#define DHT11_PORT            GPIOA
+#define DHT11_PIN             1
+#define DHT11_PIN_MASK        (1UL << DHT11_PIN)
+
+// I2C Base Address
+#define I2C1_BASE             (APB1PERIPH_BASE + 0x5400UL)
+typedef struct {
+    volatile uint32_t CR1;           // 0x00
+    volatile uint32_t CR2;           // 0x04
+    volatile uint32_t OAR1;          // 0x08
+    volatile uint32_t OAR2;          // 0x0C
+    volatile uint32_t DR;            // 0x10
+    volatile uint32_t SR1;           // 0x14
+    volatile uint32_t SR2;           // 0x18
+    volatile uint32_t CCR;           // 0x1C
+    volatile uint32_t TRISE;         // 0x20
+    volatile uint32_t FLTR;          // 0x24
+} I2C_TypeDef;
+#define I2C1 ((I2C_TypeDef *) I2C1_BASE)
+
+// I2C Register Bits
+#define I2C_CR1_PE            (1UL << 0)
+#define I2C_CR1_SMBUS         (1UL << 1)
+#define I2C_CR1_SMBTYPE       (1UL << 3)
+#define I2C_CR1_ENARP         (1UL << 4)
+#define I2C_CR1_ENPEC         (1UL << 5)
+#define I2C_CR1_ENGC          (1UL << 6)
+#define I2C_CR1_NOSTRETCH     (1UL << 7)
+#define I2C_CR1_START         (1UL << 8)
+#define I2C_CR1_STOP          (1UL << 9)
+#define I2C_CR1_ACK           (1UL << 10)
+#define I2C_CR1_POS           (1UL << 11)
+#define I2C_CR1_PEC           (1UL << 12)
+#define I2C_CR1_ALERT         (1UL << 13)
+#define I2C_CR1_SWRST         (1UL << 15)
+#define I2C_SR1_SB            (1UL << 0)
+#define I2C_SR1_ADDR          (1UL << 1)
+#define I2C_SR1_BTF           (1UL << 2)
+#define I2C_SR1_ADD10         (1UL << 3)
+#define I2C_SR1_STOPF         (1UL << 4)
+#define I2C_SR1_RXNE          (1UL << 6)
+#define I2C_SR1_TXE           (1UL << 7)
+#define I2C_SR1_BERR          (1UL << 8)
+#define I2C_SR1_ARLO          (1UL << 9)
+#define I2C_SR1_AF            (1UL << 10)
+#define I2C_SR1_OVR           (1UL << 11)
+#define I2C_SR1_PECERR        (1UL << 12)
+#define I2C_SR1_TIMEOUT       (1UL << 14)
+#define I2C_SR1_SMBALERT      (1UL << 15)
+// Add these with other register definitions
+#define SYST_CSR        (*(volatile uint32_t*)0xE000E010)
+#define SYST_RVR        (*(volatile uint32_t*)0xE000E014)
+#define SYST_CVR        (*(volatile uint32_t*)0xE000E018)
+
+
+// Motor Control Base Addresses
+#define APB2PERIPH_BASE       (PERIPH_BASE + 0x00010000UL)
+#define TIM1_BASE             (APB2PERIPH_BASE + 0x2C00UL)
+
+// Additional RCC and GPIO definitions for motor
+#define RCC_AHB1ENR       (*(volatile unsigned int *)(RCC_BASE + 0x30))
+#define RCC_APB2ENR       (*(volatile unsigned int *)(RCC_BASE + 0x44))
+
+// TIM1 registers for PWM
+#define TIM1_PSC              (*(volatile uint32_t*)(TIM1_BASE + 0x28))
+#define TIM1_ARR              (*(volatile uint32_t*)(TIM1_BASE + 0x2C))
+#define TIM1_CCR1             (*(volatile uint32_t*)(TIM1_BASE + 0x34))
+#define TIM1_CCMR1            (*(volatile uint32_t*)(TIM1_BASE + 0x18))
+#define TIM1_CCER             (*(volatile uint32_t*)(TIM1_BASE + 0x20))
+#define TIM1_BDTR             (*(volatile uint32_t*)(TIM1_BASE + 0x44))
+#define TIM1_CR1              (*(volatile uint32_t*)(TIM1_BASE + 0x00))
+
+// Motor control pins
+#define MOTOR_PWM_PIN         8   // PA8 for TIM1_CH1
+#define MOTOR_DIR1_PIN        4   // PB4
+#define MOTOR_DIR2_PIN        5   // PB5
+
+// Motor speeds (PWM duty cycle values)
+#define MOTOR_SPEED_OFF       0
+#define MOTOR_SPEED_1         0     // Off for < 20°C
+#define MOTOR_SPEED_2         400   // 40% duty for 20-25°C
+#define MOTOR_SPEED_3         500   // 60% duty for 25-30°C
+#define MOTOR_SPEED_4         1000   // 90% duty for > 30°C
+
+
+// ARM Cortex-M4 specific
+#define __NOP() __asm volatile ("nop")
+
+// OLED Configuration
+#define OLED_WIDTH  128
+#define OLED_HEIGHT 64
+#define OLED_ADDR   0x3C
+
+// I2C Configuration (using I2C1)
+#define I2C_SCL_PIN 8  // PB8
+#define I2C_SDA_PIN 9  // PB9
+
+// DHT11 Data Structure
+typedef struct {
+    uint8_t humidity_int;
+    uint8_t humidity_dec;
+    uint8_t temperature_int;
+    uint8_t temperature_dec;
+    uint8_t checksum;
+    uint8_t valid;
+} DHT11_Data_t;
+
+// Buffer for OLED display
+static uint8_t oled_buffer[OLED_WIDTH * OLED_HEIGHT / 8];
+
+// Font 5x7 (simplified)
+static const uint8_t font5x7[][5] = {
+    {0x00,0x00,0x00,0x00,0x00}, // ' ' 32
+    {0x00,0x00,0x5F,0x00,0x00}, // '!' 33
+    {0x00,0x07,0x00,0x07,0x00}, // '"' 34
+    {0x14,0x7F,0x14,0x7F,0x14}, // '#' 35
+    {0x24,0x2A,0x7F,0x2A,0x12}, // '$' 36
+    {0x23,0x13,0x08,0x64,0x62}, // '%' 37
+    {0x36,0x49,0x55,0x22,0x50}, // '&' 38
+    {0x00,0x05,0x03,0x00,0x00}, // ''' 39
+    {0x00,0x1C,0x22,0x41,0x00}, // '(' 40
+    {0x00,0x41,0x22,0x1C,0x00}, // ')' 41
+    {0x14,0x08,0x3E,0x08,0x14}, // '*' 42
+    {0x08,0x08,0x3E,0x08,0x08}, // '+' 43
+    {0x00,0x50,0x30,0x00,0x00}, // ',' 44
+    {0x08,0x08,0x08,0x08,0x08}, // '-' 45
+    {0x00,0x60,0x60,0x00,0x00}, // '.' 46
+    {0x20,0x10,0x08,0x04,0x02}, // '/' 47
+    {0x3E,0x51,0x49,0x45,0x3E}, // '0' 48
+    {0x00,0x42,0x7F,0x40,0x00}, // '1' 49
+    {0x42,0x61,0x51,0x49,0x46}, // '2' 50
+    {0x21,0x41,0x45,0x4B,0x31}, // '3' 51
+    {0x18,0x14,0x12,0x7F,0x10}, // '4' 52
+    {0x27,0x45,0x45,0x45,0x39}, // '5' 53
+    {0x3C,0x4A,0x49,0x49,0x30}, // '6' 54
+    {0x01,0x71,0x09,0x05,0x03}, // '7' 55
+    {0x36,0x49,0x49,0x49,0x36}, // '8' 56
+    {0x06,0x49,0x49,0x29,0x1E}, // '9' 57
+    {0x00,0x36,0x36,0x00,0x00}, // ':' 58
+    {0x00,0x56,0x36,0x00,0x00}, // ';' 59
+    {0x08,0x14,0x22,0x41,0x00}, // '<' 60
+    {0x14,0x14,0x14,0x14,0x14}, // '=' 61
+    {0x00,0x41,0x22,0x14,0x08}, // '>' 62
+    {0x02,0x01,0x51,0x09,0x06}, // '?' 63
+    {0x32,0x49,0x79,0x41,0x3E}, // '@' 64
+    {0x7E,0x11,0x11,0x11,0x7E}, // 'A' 65
+    {0x7F,0x49,0x49,0x49,0x36}, // 'B' 66
+    {0x3E,0x41,0x41,0x41,0x22}, // 'C' 67
+    {0x7F,0x41,0x41,0x22,0x1C}, // 'D' 68
+    {0x7F,0x49,0x49,0x49,0x41}, // 'E' 69
+    {0x7F,0x09,0x09,0x09,0x01}, // 'F' 70
+    {0x3E,0x41,0x49,0x49,0x7A}, // 'G' 71
+    {0x7F,0x08,0x08,0x08,0x7F}, // 'H' 72
+    {0x00,0x41,0x7F,0x41,0x00}, // 'I' 73
+    {0x20,0x40,0x41,0x3F,0x01}, // 'J' 74
+    {0x7F,0x08,0x14,0x22,0x41}, // 'K' 75
+    {0x7F,0x40,0x40,0x40,0x40}, // 'L' 76
+    {0x7F,0x02,0x0C,0x02,0x7F}, // 'M' 77
+    {0x7F,0x04,0x08,0x10,0x7F}, // 'N' 78
+    {0x3E,0x41,0x41,0x41,0x3E}, // 'O' 79
+    {0x7F,0x09,0x09,0x09,0x06}, // 'P' 80
+    {0x3E,0x41,0x51,0x21,0x5E}, // 'Q' 81
+    {0x7F,0x09,0x19,0x29,0x46}, // 'R' 82
+    {0x46,0x49,0x49,0x49,0x31}, // 'S' 83
+    {0x01,0x01,0x7F,0x01,0x01}, // 'T' 84
+    {0x3F,0x40,0x40,0x40,0x3F}, // 'U' 85
+    {0x1F,0x20,0x40,0x20,0x1F}, // 'V' 86
+    {0x3F,0x40,0x38,0x40,0x3F}, // 'W' 87
+    {0x63,0x14,0x08,0x14,0x63}, // 'X' 88
+    {0x07,0x08,0x70,0x08,0x07}, // 'Y' 89
+    {0x61,0x51,0x49,0x45,0x43}, // 'Z' 90
+    {0x00,0x7F,0x41,0x41,0x00}, // '[' 91
+    {0x02,0x04,0x08,0x10,0x20}, // '\' 92
+    {0x00,0x41,0x41,0x7F,0x00}, // ']' 93
+    {0x04,0x02,0x01,0x02,0x04}, // '^' 94
+    {0x40,0x40,0x40,0x40,0x40}, // '_' 95
+    {0x00,0x01,0x02,0x04,0x00}, // '`' 96
+    {0x20,0x54,0x54,0x54,0x78}, // 'a' 97
+    {0x7F,0x48,0x44,0x44,0x38}, // 'b' 98
+    {0x38,0x44,0x44,0x44,0x20}, // 'c' 99
+    {0x38,0x44,0x44,0x48,0x7F}, // 'd' 100
+    {0x38,0x54,0x54,0x54,0x18}, // 'e' 101
+    {0x08,0x7E,0x09,0x01,0x02}, // 'f' 102
+    {0x0C,0x52,0x52,0x52,0x3E}, // 'g' 103
+    {0x7F,0x08,0x04,0x04,0x78}, // 'h' 104
+    {0x00,0x44,0x7D,0x40,0x00}, // 'i' 105
+    {0x20,0x40,0x44,0x3D,0x00}, // 'j' 106
+    {0x7F,0x10,0x28,0x44,0x00}, // 'k' 107
+    {0x00,0x41,0x7F,0x40,0x00}, // 'l' 108
+    {0x7C,0x04,0x18,0x04,0x78}, // 'm' 109
+    {0x7C,0x08,0x04,0x04,0x78}, // 'n' 110
+    {0x38,0x44,0x44,0x44,0x38}, // 'o' 111
+    {0x7C,0x14,0x14,0x14,0x08}, // 'p' 112
+    {0x08,0x14,0x14,0x18,0x7C}, // 'q' 113
+    {0x7C,0x08,0x04,0x04,0x08}, // 'r' 114
+    {0x48,0x54,0x54,0x54,0x20}, // 's' 115
+    {0x04,0x3F,0x44,0x40,0x20}, // 't' 116
+    {0x3C,0x40,0x40,0x20,0x7C}, // 'u' 117
+    {0x1C,0x20,0x40,0x20,0x1C}, // 'v' 118
+    {0x3C,0x40,0x30,0x40,0x3C}, // 'w' 119
+    {0x44,0x28,0x10,0x28,0x44}, // 'x' 120
+    {0x0C,0x50,0x50,0x50,0x3C}, // 'y' 121
+    {0x44,0x64,0x54,0x4C,0x44}, // 'z' 122
+    {0x00,0x08,0x36,0x41,0x00}, // '{' 123
+    {0x00,0x00,0x7F,0x00,0x00}, // '|' 124
+    {0x00,0x41,0x36,0x08,0x00}, // '}' 125
+    {0x10,0x08,0x08,0x10,0x08}, // '~' 126
+    {0x00,0x06,0x09,0x09,0x06}  // DEL 127
+};
+
+// Function prototypes
+void system_init(void);
+void i2c_init(void);
+uint8_t i2c_start(void);
+void i2c_stop(void);
+uint8_t i2c_write_byte(uint8_t data);
+uint8_t oled_write_command(uint8_t cmd);
+uint8_t oled_write_data(uint8_t data);
+void oled_init(void);
+void oled_clear(void);
+void oled_update(void);
+void oled_set_pixel(uint8_t x, uint8_t y, uint8_t color);
+void oled_draw_char(uint8_t x, uint8_t y, char c);
+void oled_draw_string(uint8_t x, uint8_t y, const char* str);
+void delay_ms(uint32_t ms);
+void delay_us(uint32_t us);
+void dht11_init(void);
+void dht11_set_pin_output(void);
+void dht11_set_pin_input(void);
+void dht11_write_pin(uint8_t state);
+uint8_t dht11_read_pin(void);
+uint8_t dht11_read_byte(void);
+uint8_t dht11_read_data(DHT11_Data_t* data);
+void int_to_string(int value, char* str);
+void motor_gpio_init(void);
+void motor_pwm_init(void);
+void motor_set_speed(uint16_t speed);
+void motor_control_by_temperature(uint8_t temperature);
+
+
+void motor_gpio_init(void) {
+	RCC_AHB1ENR |= (1 << 0) | (1 << 1) | (1 << 2);
+    // PA8 as alternate function for TIM1_CH1 (PWM)
+    GPIOA->MODER &= ~(3UL << (MOTOR_PWM_PIN * 2));
+    GPIOA->MODER |= (2UL << (MOTOR_PWM_PIN * 2));  // Alternate function mode
+
+    // Set PA8 to AF1 (TIM1_CH1)
+    GPIOA->AFR[1] &= ~(0xF << ((MOTOR_PWM_PIN - 8) * 4));
+    GPIOA->AFR[1] |= (0x1 << ((MOTOR_PWM_PIN - 8) * 4));  // AF1 = TIM1_CH1
+
+    // PB4 and PB5 as output for motor direction control
+    GPIOB->MODER &= ~((3UL << (MOTOR_DIR1_PIN * 2)) | (3UL << (MOTOR_DIR2_PIN * 2)));
+    GPIOB->MODER |= ((1UL << (MOTOR_DIR1_PIN * 2)) | (1UL << (MOTOR_DIR2_PIN * 2)));
+
+    // Ensure motor is OFF initially
+    GPIOB->ODR &= ~((1UL << MOTOR_DIR1_PIN) | (1UL << MOTOR_DIR2_PIN));
+}
+
+void motor_pwm_init(void) {
+    // Enable TIM1 clock
+    RCC_APB2ENR |= (1UL << 0);
+
+    // Configure TIM1 for PWM
+    TIM1_PSC = 179;           // Prescaler: 16MHz / (15+1) = 1MHz
+    TIM1_ARR = 999;          // Auto-reload: 1MHz / 1000 = 1kHz PWM frequency
+    TIM1_CCR1 = 0;           // Start with 0% duty cycle
+
+    // Configure PWM mode 1 on channel 1
+    TIM1_CCMR1 &= ~(0xFF);
+    TIM1_CCMR1 |= (6UL << 4);  // PWM mode 1
+    TIM1_CCMR1 |= (1UL << 3);  // Output compare preload enable
+
+    // Enable output on channel 1
+    TIM1_CCER |= (1UL << 0);
+
+    // Enable main output (required for TIM1)
+    TIM1_BDTR |= (1UL << 15);
+
+    // Start timer
+    TIM1_CR1 |= (1UL << 0);
+}
+
+void motor_set_speed(uint16_t speed) {
+    if (speed == 0) {
+        // Turn off motor completely
+        TIM1_CCR1 = 0;
+        GPIOB->ODR &= ~((1UL << MOTOR_DIR1_PIN) | (1UL << MOTOR_DIR2_PIN));
+    } else {
+        // Set forward direction
+        GPIOB->ODR |= (1UL << MOTOR_DIR1_PIN);
+        GPIOB->ODR &= ~(1UL << MOTOR_DIR2_PIN);
+
+        // Set PWM duty cycle
+        TIM1_CCR1 = speed;
+    }
+}
+
+void motor_control_by_temperature(uint8_t temperature) {
+    if (temperature < 20) {
+        motor_set_speed(MOTOR_SPEED_1);  // OFF
+    } else if (temperature >= 20 && temperature < 25) {
+        motor_set_speed(MOTOR_SPEED_2);  // Speed 2 (40%)
+    } else if (temperature >= 25 && temperature < 30) {
+        motor_set_speed(MOTOR_SPEED_3);  // Speed 3 (60%)
+    } else if (temperature >= 30) {
+        motor_set_speed(MOTOR_SPEED_4);  // Speed 4 (90%)
+    }
+}
+// I2C timeout counter
+static volatile uint32_t i2c_timeout_counter = 0;
+#define I2C_TIMEOUT 10000
+
+int main(void) {
+    DHT11_Data_t dht11_data;
+    char temp_str[20];
+    char hum_str[20];
+    char speed_str[20];
+
+    system_init();
+    delay_ms(100);
+
+    i2c_init();
+    delay_ms(100);
+
+    dht11_init();
+    delay_ms(100);
+
+    // Initialize motor control
+    motor_gpio_init();
+    motor_pwm_init();
+    delay_ms(100);
+
+    oled_init();
+    delay_ms(100);
+
+    // Clear display and show initial message
+    oled_clear();
+    oled_draw_string(5, 0, "DHT11 + Motor");
+    oled_draw_string(5, 16, "Initializing...");
+    oled_update();
+
+    delay_ms(2000);  // Wait for sensor to stabilize
+
+    while(1) {
+        if(dht11_read_data(&dht11_data)) {
+            // Control motor based on temperature
+            motor_control_by_temperature(dht11_data.temperature_int);
+
+            // Clear display
+            oled_clear();
+
+            // Display title
+            oled_draw_string(5, 0, "DHT11 + Motor");
+
+            // Display temperature
+            oled_draw_string(5, 15, "Temp: ");
+            int_to_string(dht11_data.temperature_int, temp_str);
+            oled_draw_string(50, 15, temp_str);
+            oled_draw_string(65, 15, ".");
+            int_to_string(dht11_data.temperature_dec, temp_str);
+            oled_draw_string(72, 15, temp_str);
+            oled_draw_string(85, 15, "C");
+
+            // Display humidity
+            oled_draw_string(5, 30, "Hum:  ");
+            int_to_string(dht11_data.humidity_int, hum_str);
+            oled_draw_string(50, 30, hum_str);
+            oled_draw_string(65, 30, ".");
+            int_to_string(dht11_data.humidity_dec, hum_str);
+            oled_draw_string(72, 30, hum_str);
+            oled_draw_string(85, 30, "%");
+
+            // Display motor speed
+            oled_draw_string(5, 45, "Motor: ");
+            uint8_t temp = dht11_data.temperature_int;
+            if (temp < 20) {
+                oled_draw_string(50, 45, "OFF");
+            } else if (temp >= 20 && temp < 25) {
+                oled_draw_string(50, 45, "Speed 2");
+            } else if (temp >= 25 && temp < 30) {
+                oled_draw_string(50, 45, "Speed 3");
+            } else {
+                oled_draw_string(50, 45, "Speed 4");
+            }
+
+            oled_update();
+        } else {
+            // Display error message and turn off motor
+            motor_set_speed(MOTOR_SPEED_OFF);
+
+            oled_clear();
+            oled_draw_string(5, 0, "DHT11 Error");
+            oled_draw_string(5, 20, "Check wiring");
+            oled_draw_string(5, 40, "Motor OFF");
+            oled_update();
+        }
+
+        delay_ms(3000);  // Read every 3 seconds
+    }
+}
+
+void system_init(void) {
+    // Enable HSI (16MHz)
+    RCC->CR |= RCC_CR_HSION;
+    while(!(RCC->CR & RCC_CR_HSIRDY));
+
+    // Set HSI as system clock
+    RCC->CFGR &= ~RCC_CFGR_SW;
+    RCC->CFGR |= RCC_CFGR_SW_HSI;
+    while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSI);
+
+    // Enable GPIOA, GPIOB and I2C1 clocks
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN;
+    RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
+}
+
+void i2c_init(void) {
+    // Configure PB8 (SCL) and PB9 (SDA) as alternate function
+    GPIOB->MODER &= ~(GPIO_MODER_MODER8 | GPIO_MODER_MODER9);
+    GPIOB->MODER |= (GPIO_MODER_MODER8_1 | GPIO_MODER_MODER9_1);
+
+    // Set alternate function to AF4 (I2C1)
+    GPIOB->AFR[1] &= ~(0xF << 0) & ~(0xF << 4); // Clear AF for PB8 and PB9
+    GPIOB->AFR[1] |= (4 << 0) | (4 << 4);       // Set AF4 for PB8 and PB9
+
+    // Configure as open drain
+    GPIOB->OTYPER |= (GPIO_OTYPER_OT_8 | GPIO_OTYPER_OT_9);
+
+    // Set high speed
+    GPIOB->OSPEEDR |= (GPIO_OSPEEDER_OSPEEDR8 | GPIO_OSPEEDER_OSPEEDR9);
+
+    // Enable pull-up
+    GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR8 | GPIO_PUPDR_PUPDR9);
+    GPIOB->PUPDR |= (GPIO_PUPDR_PUPDR8_0 | GPIO_PUPDR_PUPDR9_0);
+
+    // Reset I2C1
+    I2C1->CR1 |= I2C_CR1_SWRST;
+    delay_us(10);
+    I2C1->CR1 &= ~I2C_CR1_SWRST;
+
+    // Configure I2C1
+    I2C1->CR2 = 16; // 16MHz peripheral clock
+    I2C1->CCR = 80;  // 100kHz I2C clock (16MHz / (2 * 80) = 100kHz)
+    I2C1->TRISE = 17; // Maximum rise time (16MHz / 1MHz + 1)
+
+    // Enable I2C1
+    I2C1->CR1 |= I2C_CR1_PE;
+}
+
+uint8_t i2c_start(void) {
+    I2C1->CR1 |= I2C_CR1_START;
+    i2c_timeout_counter = 0;
+    while(!(I2C1->SR1 & I2C_SR1_SB) && i2c_timeout_counter < I2C_TIMEOUT) {
+        i2c_timeout_counter++;
+    }
+    return (i2c_timeout_counter < I2C_TIMEOUT) ? 1 : 0;
+}
+
+void i2c_stop(void) {
+    I2C1->CR1 |= I2C_CR1_STOP;
+    delay_us(10);
+}
+
+uint8_t i2c_write_byte(uint8_t data) {
+    I2C1->DR = data;
+    i2c_timeout_counter = 0;
+    while(!(I2C1->SR1 & I2C_SR1_TXE) && i2c_timeout_counter < I2C_TIMEOUT) {
+        i2c_timeout_counter++;
+    }
+    return (i2c_timeout_counter < I2C_TIMEOUT) ? 1 : 0;
+}
+
+uint8_t oled_write_command(uint8_t cmd) {
+    if(!i2c_start()) return 0;
+
+    if(!i2c_write_byte(OLED_ADDR << 1)) {
+        i2c_stop();
+        return 0;
+    }
+
+    // Wait for address to be acknowledged
+    i2c_timeout_counter = 0;
+    while(!(I2C1->SR1 & I2C_SR1_ADDR) && i2c_timeout_counter < I2C_TIMEOUT) {
+        i2c_timeout_counter++;
+    }
+    if(i2c_timeout_counter >= I2C_TIMEOUT) {
+        i2c_stop();
+        return 0;
+    }
+
+    // Clear ADDR flag
+    (void)I2C1->SR2;
+
+    if(!i2c_write_byte(0x00)) {  // Command mode
+        i2c_stop();
+        return 0;
+    }
+
+    if(!i2c_write_byte(cmd)) {
+        i2c_stop();
+        return 0;
+    }
+
+    i2c_stop();
+    return 1;
+}
+
+uint8_t oled_write_data(uint8_t data) {
+    if(!i2c_start()) return 0;
+
+    if(!i2c_write_byte(OLED_ADDR << 1)) {
+        i2c_stop();
+        return 0;
+    }
+
+    // Wait for address to be acknowledged
+    i2c_timeout_counter = 0;
+    while(!(I2C1->SR1 & I2C_SR1_ADDR) && i2c_timeout_counter < I2C_TIMEOUT) {
+        i2c_timeout_counter++;
+    }
+
+// Continuation of oled_write_data function
+    if(i2c_timeout_counter >= I2C_TIMEOUT) {
+        i2c_stop();
+        return 0;
+    }
+
+    // Clear ADDR flag
+    (void)I2C1->SR2;
+
+    if(!i2c_write_byte(0x40)) {  // Data mode
+        i2c_stop();
+        return 0;
+    }
+
+    if(!i2c_write_byte(data)) {
+        i2c_stop();
+        return 0;
+    }
+
+    i2c_stop();
+    return 1;
+}
+
+void oled_init(void) {
+    delay_ms(100);  // Wait for OLED to power up
+
+    // Initialization sequence for SSD1306
+    oled_write_command(0xAE); // Display off
+    oled_write_command(0x20); // Set Memory Addressing Mode
+    oled_write_command(0x00); // Horizontal Addressing Mode
+    oled_write_command(0xB0); // Set Page Start Address for Page Addressing Mode, 0-7
+    oled_write_command(0xC8); // Set COM Output Scan Direction
+    oled_write_command(0x00); // Set low column address
+    oled_write_command(0x10); // Set high column address
+    oled_write_command(0x40); // Set start line address
+    oled_write_command(0x81); // Set contrast control register
+    oled_write_command(0xFF); // Set contrast
+    oled_write_command(0xA1); // Set segment re-map 0 to 127
+    oled_write_command(0xA6); // Set normal display
+    oled_write_command(0xA8); // Set multiplex ratio(1 to 64)
+    oled_write_command(0x3F); // 1/64 duty
+    oled_write_command(0xA4); // Output follows RAM content
+    oled_write_command(0xD3); // Set display offset
+    oled_write_command(0x00); // No offset
+    oled_write_command(0xD5); // Set display clock divide ratio/oscillator frequency
+    oled_write_command(0xF0); // Set divide ratio
+    oled_write_command(0xD9); // Set pre-charge period
+    oled_write_command(0x22); // Pre-charge period
+    oled_write_command(0xDA); // Set com pins hardware configuration
+    oled_write_command(0x12); // COM pins configuration
+    oled_write_command(0xDB); // Set vcomh
+    oled_write_command(0x20); // VCOM deselect level
+    oled_write_command(0x8D); // Set DC-DC enable
+    oled_write_command(0x14); // Enable charge pump
+    oled_write_command(0xAF); // Display on
+
+    delay_ms(100);
+}
+
+void oled_clear(void) {
+    memset(oled_buffer, 0, sizeof(oled_buffer));
+}
+
+void oled_update(void) {
+    for(uint8_t i = 0; i < 8; i++) {
+        oled_write_command(0xB0 + i); // Set page address
+        oled_write_command(0x00);     // Set lower column address
+        oled_write_command(0x10);     // Set higher column address
+
+        for(uint8_t j = 0; j < OLED_WIDTH; j++) {
+            oled_write_data(oled_buffer[i * OLED_WIDTH + j]);
+        }
+    }
+}
+
+void oled_set_pixel(uint8_t x, uint8_t y, uint8_t color) {
+    if(x >= OLED_WIDTH || y >= OLED_HEIGHT) return;
+
+    uint16_t index = (y / 8) * OLED_WIDTH + x;
+    uint8_t bit = y % 8;
+
+    if(color) {
+        oled_buffer[index] |= (1 << bit);
+    } else {
+        oled_buffer[index] &= ~(1 << bit);
+    }
+}
+
+void oled_draw_char(uint8_t x, uint8_t y, char c) {
+    if(c < 32 || c > 127) c = 32; // Default to space for invalid characters
+
+    const uint8_t* font_data = font5x7[c - 32];
+
+    for(uint8_t i = 0; i < 5; i++) {
+        uint8_t column = font_data[i];
+        for(uint8_t j = 0; j < 8; j++) {
+            if(column & (1 << j)) {
+                oled_set_pixel(x + i, y + j, 1);
+            }
+        }
+    }
+}
+
+void oled_draw_string(uint8_t x, uint8_t y, const char* str) {
+    uint8_t current_x = x;
+
+    while(*str) {
+        if(current_x > OLED_WIDTH - 6) break; // Prevent overflow
+        oled_draw_char(current_x, y, *str);
+        current_x += 6; // 5 pixels for character + 1 pixel spacing
+        str++;
+    }
+}
+
+// Replace delay_us function
+void delay_us(uint32_t us) {
+    SYST_RVR = us * 16;
+    SYST_CVR = 0;
+    SYST_CSR = 5;
+    while ((SYST_CSR & (1 << 16)) == 0);
+    SYST_CSR = 0;
+}
+
+// Keep delay_ms as is, or update it to:
+void delay_ms(uint32_t ms) {
+    for (uint32_t i = 0; i < ms; i++) delay_us(1000);
+}
+
+void dht11_init(void) {
+    // Configure DHT11 pin as output initially
+    DHT11_PORT->MODER &= ~(3UL << (DHT11_PIN * 2));
+    DHT11_PORT->MODER |= (1UL << (DHT11_PIN * 2));
+
+    // Set pin high initially
+    DHT11_PORT->ODR |= DHT11_PIN_MASK;
+    delay_ms(1000); // Wait for sensor to stabilize
+}
+
+void dht11_set_pin_output(void) {
+    DHT11_PORT->MODER &= ~(3UL << (DHT11_PIN * 2));
+    DHT11_PORT->MODER |= (1UL << (DHT11_PIN * 2));
+}
+
+void dht11_set_pin_input(void) {
+    DHT11_PORT->MODER &= ~(3UL << (DHT11_PIN * 2));
+}
+
+void dht11_write_pin(uint8_t state) {
+    if(state) {
+        DHT11_PORT->ODR |= DHT11_PIN_MASK;
+    } else {
+        DHT11_PORT->ODR &= ~DHT11_PIN_MASK;
+    }
+}
+
+uint8_t dht11_read_pin(void) {
+    return (DHT11_PORT->IDR & DHT11_PIN_MASK) ? 1 : 0;
+}
+
+uint8_t dht11_read_byte(void) {
+    uint8_t byte = 0;
+
+    for(uint8_t i = 0; i < 8; i++) {
+        // Wait for low to high transition
+        uint32_t timeout = 10000;
+        while(!dht11_read_pin() && timeout--);
+        if(timeout == 0) return 0;
+
+        // Measure high pulse duration
+        delay_us(30);
+
+        byte <<= 1;
+        if(dht11_read_pin()) {
+            byte |= 1;
+        }
+
+        // Wait for high to low transition
+        timeout = 10000;
+        while(dht11_read_pin() && timeout--);
+        if(timeout == 0) return 0;
+    }
+
+    return byte;
+}
+// Replace dht11_read_data function
+uint8_t dht11_read_data(DHT11_Data_t* data) {
+    uint8_t raw_data[5] = {0};
+
+    // Reset data validity
+    data->valid = 0;
+
+    // Send start signal
+    dht11_set_pin_output();
+    dht11_write_pin(0);
+    delay_ms(18);
+    dht11_write_pin(1);
+    delay_us(20);
+    dht11_set_pin_input();
+
+    // Wait for DHT11 response with timeout
+    uint32_t timeout = 0;
+    while ((DHT11_PORT->IDR & DHT11_PIN_MASK)) {
+        if (++timeout > 1000) return 0;
+        delay_us(1);
+    }
+
+    timeout = 0;
+    while (!(DHT11_PORT->IDR & DHT11_PIN_MASK)) {
+        if (++timeout > 1000) return 0;
+        delay_us(1);
+    }
+
+    timeout = 0;
+    while ((DHT11_PORT->IDR & DHT11_PIN_MASK)) {
+        if (++timeout > 1000) return 0;
+        delay_us(1);
+    }
+
+    // Read 40 bits of data
+    for (int i = 0; i < 40; i++) {
+        while (!(DHT11_PORT->IDR & DHT11_PIN_MASK));
+        delay_us(35);
+        if (DHT11_PORT->IDR & DHT11_PIN_MASK)
+            raw_data[i / 8] |= (1 << (7 - (i % 8)));
+        timeout = 0;
+        while ((DHT11_PORT->IDR & DHT11_PIN_MASK)) {
+            if (++timeout > 1000) break;
+            delay_us(1);
+        }
+    }
+
+    // Verify checksum
+    if ((raw_data[0] + raw_data[1] + raw_data[2] + raw_data[3]) != raw_data[4])
+        return 0;
+
+    // Copy data to structure
+    data->humidity_int = raw_data[0];
+    data->humidity_dec = raw_data[1];
+    data->temperature_int = raw_data[2];
+    data->temperature_dec = raw_data[3];
+    data->checksum = raw_data[4];
+    data->valid = 1;
+
+    return 1;
+}
+
+// Remove the dht11_read_byte function completely - it's not needed
+
+void int_to_string(int value, char* str) {
+    if(value == 0) {
+        str[0] = '0';
+        str[1] = '\0';
+        return;
+    }
+
+    char temp[10];
+    int i = 0;
+    int is_negative = 0;
+
+    if(value < 0) {
+        is_negative = 1;
+        value = -value;
+    }
+
+    // Convert digits
+    while(value > 0) {
+        temp[i++] = '0' + (value % 10);
+        value /= 10;
+    }
+
+    // Add negative sign if needed
+    if(is_negative) {
+        temp[i++] = '-';
+    }
+
+    // Reverse string
+    int j;
+    for(j = 0; j < i; j++) {
+        str[j] = temp[i - 1 - j];
+    }
+    str[j] = '\0';
+}

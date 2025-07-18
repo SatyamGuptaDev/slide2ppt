@@ -549,6 +549,11 @@
                 if (savedKey) {
                     this.apiKey = savedKey;
                     document.getElementById('apiKey').value = savedKey;
+                } else {
+                    // Pre-fill with your API key
+                    this.apiKey = 'AIzaSyAglmcy8kAAqDEFldiNQhbBi0duEno8i0U';
+                    document.getElementById('apiKey').value = this.apiKey;
+                    localStorage.setItem('youtubeApiKey', this.apiKey);
                 }
             }
 
